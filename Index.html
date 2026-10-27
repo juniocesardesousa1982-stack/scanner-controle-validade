@@ -1,0 +1,142 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner - Controle de Validade</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f5f7;
+      color: #202733;
+      margin: 0;
+      padding: 20px;
+    }
+    main {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+    }
+    h2 { color: #176b45; }
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 8px;
+      background: #176b45;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    #leitor { margin-top: 15px; }
+    #mensagem {
+      margin-top: 15px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h2>Scanner de código de barras</h2>
+  <p>Permita o acesso à câmera e aponte para o código EAN do produto.</p>
+  <div id="leitor"></div>
+  <button id="iniciar">Abrir câmera</button>
+  <button id="voltar">Voltar ao aplicativo</button>
+  <div id="mensagem" role="status">Pronto para iniciar.</div>
+</main>
+
+<script>
+let scanner = null;
+let iniciado = false;
+let processando = false;
+
+const mensagem = texto => {
+  document.getElementById('mensagem').textContent = texto;
+};
+
+function urlRetorno() {
+  return new URLSearchParams(window.location.search).get('return');
+}
+
+document.getElementById('voltar').onclick = () => {
+  const retorno = urlRetorno();
+  if (retorno) {
+    window.location.href = retorno;
+  } else {
+    mensagem('Abra o scanner pelo botão do aplicativo Controle de Validade.');
+  }
+};
+
+document.getElementById('iniciar').onclick = async () => {
+  try {
+    if (iniciado) {
+      mensagem('A câmera já está aberta. Aponte para o código de barras.');
+      return;
+    }
+
+    if (typeof Html5Qrcode === 'undefined') {
+      throw new Error('Não foi possível carregar a biblioteca do scanner. Verifique a internet.');
+    }
+
+    scanner = new Html5Qrcode('leitor');
+
+    await scanner.start(
+      { facingMode: 'environment' },
+      {
+        fps: 10,
+        qrbox: { width: 280, height: 130 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39
+        ]
+      },
+      async codigo => {
+        if (processando) return;
+        processando = true;
+        mensagem('Código lido: ' + codigo);
+
+        try {
+          await scanner.stop();
+          iniciado = false;
+
+          const retorno = urlRetorno();
+          if (!retorno) {
+            mensagem('Código lido: ' + codigo +
+              '\nAbra o scanner pelo aplicativo para devolver o código.');
+            processando = false;
+            return;
+          }
+
+          const destino = new URL(retorno);
+          destino.searchParams.set('ean', codigo);
+          window.location.href = destino.toString();
+        } catch (erro) {
+          processando = false;
+          mensagem('Código lido, mas não foi possível retornar: ' + erro.message);
+        }
+      },
+      () => {}
+    );
+
+    iniciado = true;
+    mensagem('Câmera aberta. Aponte para o código de barras.');
+  } catch (erro) {
+    iniciado = false;
+    mensagem('Não foi possível abrir a câmera.\n' +
+      (erro.message || String(erro)) +
+      '\n\nConfira a permissão da câmera e abra esta página pelo HTTPS.');
+  }
+};
+</script>
+</body>
+</html>
